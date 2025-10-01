@@ -3,34 +3,22 @@ import Counter from "../models/counterModel.js";
 
 const router = express.Router();
 
-// get one counter by userId
-router.post("/getOne", async (req, res) => {
-  const { userId } = req.body;
-  console.log(userId);
-  const counter = await Counter.findOne({ userId });
+router.get("/", async (req, res) => {
+  const counter =
+    (await Counter.findOne()) || (await Counter.create({ count: 0 }));
   res.json({ counter });
+  console.log(counter.count);
 });
 
-// create a new counter
-router.post("/create", async (req, res) => {
-  const userId = req.body.userId;
-  const count = req.body.count;
-  const counter = await Counter.create({ userId, count });
-  res.json({ counter });
-});
-
-// update the count
 router.post("/update", async (req, res) => {
-  const userId = req.body.userId;
-  const count = req.body.count;
-
+  const { count } = req.body;
   const counter = await Counter.findOneAndUpdate(
-    { userId },
+    {},
     { count },
-    { new: true }
+    { new: true, upsert: true }
   );
-
   res.json({ counter });
+  console.log(counter.count);
 });
 
 export default router;

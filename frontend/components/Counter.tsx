@@ -1,8 +1,43 @@
 import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useCounter, useUpdateCounter } from "../hooks/useCounter";
 
 export default function Counter() {
+  const { data, isLoading } = useCounter();
+  const updateCounter = useUpdateCounter();
   const [count, setCount] = useState(0);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync with server data
+  useEffect(() => {
+    if (data?.counter.count !== undefined) {
+      setCount(data.counter.count);
+    }
+  }, [data?.counter.count]);
+
+  // Cleanup timeout
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
+  const updateCount = (newCount: number) => {
+    setCount(newCount);
+
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      updateCounter.mutate(newCount);
+    }, 2000);
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -11,13 +46,13 @@ export default function Counter() {
       <View style={styles.buttons}>
         <TouchableOpacity
           style={[styles.btn, styles.minus]}
-          onPress={() => setCount(count - 1)}
+          onPress={() => updateCount(count - 1)}
         >
           <Text style={styles.btnText}>−</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.btn, styles.plus]}
-          onPress={() => setCount(count + 1)}
+          onPress={() => updateCount(count + 1)}
         >
           <Text style={styles.btnText}>+</Text>
         </TouchableOpacity>
@@ -72,5 +107,13 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "800",
     color: "#fff",
+  },
+  disabled: {
+    opacity: 0.5,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#6b7280",
+    marginTop: 16,
   },
 });

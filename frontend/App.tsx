@@ -1,9 +1,13 @@
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, Text, View } from "react-native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Counter from "./components/Counter";
 
-export default function App() {
-  return <Counter />;
-}
+const queryClient = new QueryClient();
 
-const styles = StyleSheet.create({});
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Counter />
+    </QueryClientProvider>
+  );
+}
