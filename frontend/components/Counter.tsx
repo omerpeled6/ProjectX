@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useCounter, useUpdateCounter } from "../hooks/useCounter";
 
 export default function Counter() {
-  const { data, isLoading } = useCounter();
+  const { data, isLoading, error } = useCounter();
   const updateCounter = useUpdateCounter();
   const [count, setCount] = useState(0);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -35,6 +35,14 @@ export default function Counter() {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>Loading...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Server is down</Text>
       </View>
     );
   }
