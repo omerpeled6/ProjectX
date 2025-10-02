@@ -1,5 +1,5 @@
 import express from "express";
-import Counter from "../models/counterModel.js";
+import Counter from "../models/counterModel";
 
 const router = express.Router();
 

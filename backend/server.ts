@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import counterRoutes from "./routes/counterRoutes.ts";
+import counterRoutes from "./routes/counterRoutes";
 
 // Load environment variables
 dotenv.config();
