@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
+    "module": "CommonJS",
     "moduleResolution": "node",
     "lib": ["ES2022"],
     "strict": true,
@@ -10,12 +10,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "allowImportingTsExtensions": true,
     "noEmit": true
   },
   "include": ["server.ts"],
   "exclude": ["node_modules"],
   "ts-node": {
-    "esm": true
+    "esm": false
   }
 }
