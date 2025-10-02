@@ -1,0 +1,198 @@
+יאללה – הכי פשוט שיש, שלב-אחר-שלב, כדי לפרוס את ה-Express (TS) שלך על ECS/Fargate דרך ECR. לא נדרש ניסיון קודם ב-AWS. נלך על מסלול “קונסול + GitHub Actions”, מינימום הגדרות.
+
+⸻
+
+לפני שמתחילים (דקה)
+
+בפרויקט ה-Express שלך:
+	•	ודא שהשרת מאזין ל־process.env.PORT || 3000.
+	•	הוסף נתיב בריאות:
+
+app.get('/health', (_req, res) => res.send('ok'));
+
+
+⸻
+
+שלב 1: הכן Dockerfile + .dockerignore
+
+בקובץ Dockerfile בשורש הפרויקט:
+
+# --- build stage ---
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# --- run stage ---
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY --from=build /app/dist ./dist
+# שנה לפי ה-entry שלך
+CMD ["node", "dist/index.js"]
+EXPOSE 3000
+
+.dockerignore בסיסי:
+
+node_modules
+dist
+.git
+.gitignore
+Dockerfile
+.github
+
+
+⸻
+
+שלב 2: צור מאגר תמונות (ECR)
+	1.	היכנס ל־AWS Console → חפש ECR → Repositories → Create repository.
+	2.	תן שם, למשל: express-app.
+	3.	השאר ברירת מחדל (Private). שמור את השם וה־Region.
+
+⸻
+
+שלב 3: צור משתמש IAM ל-GitHub Actions (הכי פשוט)
+	1.	AWS Console → IAM → Users → Create user → שם: github-actions-ecr.
+	2.	Give user Access key – Programmatic access.
+	3.	Permissions: צירף את המדיניות המובנות:
+	•	AmazonEC2ContainerRegistryFullAccess (להעלאה ל-ECR)
+	•	AmazonECS_FullAccess (לפריסה אוטומטית, אופציונלי לשלב 7)
+	4.	סיים וקבל Access key id + Secret. שמור אותם זמנית.
+
+הכי נכון/מאובטח זה OIDC בלי מפתחות סטטיים – אבל נתחיל בפשוט. תמיד אפשר לשדרג.
+
+⸻
+
+שלב 4: הוסף סודות ל-GitHub
+
+ב־GitHub → repo → Settings → Secrets and variables → Actions → New repository secret:
+	•	AWS_ACCESS_KEY_ID – מה-IAM.
+	•	AWS_SECRET_ACCESS_KEY – מה-IAM.
+	•	AWS_REGION – למשל eu-central-1.
+	•	ECR_REPOSITORY – שם ה־ECR, לדוגמה express-app.
+	•	(אופציונלי לפריסה אוטומטית)
+	•	ECS_CLUSTER – תגדיר בשלב 6 שם שתיבחר.
+	•	ECS_SERVICE – שם השירות שתיצור בשלב 6.
+
+⸻
+
+שלב 5: GitHub Actions – Build & Push ל-ECR
+
+צור קובץ .github/workflows/deploy.yml:
+
+name: Build and Push to ECR
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: latest
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+בשלב זה כל push ל-main ידחוף :latest ל-ECR.
+
+⸻
+
+שלב 6: צור אשכול ושירות ב-ECS Fargate (פעם אחת, בקונסול)
+	1.	AWS Console → חפש ECS.
+	2.	Clusters → Create cluster → Network-only (Fargate) → שם: express-cluster.
+	3.	היכנס ל־Cluster שזה עתה יצרת → Create service.
+	•	Compute options: Fargate
+	•	Deployment type: Rolling update
+	•	Task definition: לחץ “Create new task definition” (ייפתח ויזרד):
+	•	Launch type: Fargate
+	•	CPU/Memory: 0.5 vCPU, 1 GB (אפשר להקטין/להגדיל בהמשך)
+	•	Task role: None (או לפי צורך)
+	•	Container:
+	•	Image URI: פתח ECR, העתק את ה־URI של :latest והדבק.
+	•	Port mappings: 3000 TCP
+	•	Health check (Container): פקודת curl לא צריך; נגדיר Health ב-ALB.
+	•	שמור את ה-Task Definition.
+	•	חזרה למסך יצירת השירות:
+	•	Service name: express-service
+	•	Desired tasks: 1
+	•	Networking:
+	•	VPC: בחר ברירת מחדל
+	•	Subnets: סמן 2–3 זמינות
+	•	Security group: חדש עם כלל Inbound: 80/TCP 0.0.0.0/0
+	•	Public IP: Enable (כן, שנקבל כתובת ציבורית מאחורי ALB)
+	•	Load balancing:
+	•	Type: Application Load Balancer
+	•	Create new ALB (Public)
+	•	Listener: 80 HTTP
+	•	Target group: חדש, Health check path: /health
+	•	Create service.
+
+תוך ~2–3 דקות יהיה לך DNS של ה-ALB. פתח בדפדפן – אמור להציג את האפליקציה שלך.
+
+⸻
+
+שלב 7 (אופציונלי): פריסה אוטומטית מה-Actions ל-ECS
+
+הוסף Job שני לקובץ ה-Actions שיאמר ל-ECS “לעדכן” את השירות כדי למשוך את latest החדש:
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Force new deployment
+        run: |
+          aws ecs update-service \
+            --cluster "${{ secrets.ECS_CLUSTER }}" \
+            --service "${{ secrets.ECS_SERVICE }}" \
+            --force-new-deployment
+
+בפעם הראשונה תגדיר את ECS_CLUSTER ו־ECS_SERVICE כסודות (Step 4).
+מעכשיו, כל push ל-main → בונה תמונה → דוחף ל-ECR → “מנער” את השירות שימשוך את הגרסה החדשה.
+
+⸻
+
+בדיקות ותקלות נפוצות
+	•	בריאות לא עוברת: ודא /health מחזיר 200, שהפורט 3000, וה-SG מאפשר 80.
+	•	Timeout מאחורי ALB: אם ה-Express לא מאזין ל-process.env.PORT, תקן בקוד.
+	•	לא מגיעים מבחוץ: וודא ALB Public, Security Group פתוח ל-80, ו-Subnets ציבוריים.
+
+⸻
+
+מה קיבלת בפועל
+	•	פייפליין קל: GitHub → (Actions) → Build & Push ל-ECR → ECS Fargate מריץ קונטיינר מאחורי ALB.
+	•	זמני דיפלוי ~1–3 דקות, בלי “קולד-סטארט” לבקשה עצמה (הקונטיינר רץ כל הזמן).
+	•	אתה נשאר ב־Free Account עם שימוש בקרדיטים (אם יש); אין צורך ב-App Runner.
+
+אם תרצה, אכין לך גרסאות “מוכנות-להדבקה” לפי השמות המדויקים שנתת (שם ריפו, Cluster, Service, Region), או אעבור איתך על צילומי מסך של ה-ECS Wizard כדי לוודא שכל תיבה מוגדרת נכון.
