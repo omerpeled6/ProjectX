@@ -22,10 +22,10 @@ app.use("/counter", counterRoutes);
 mongoose
   .connect(process.env.MONGOURI!, { dbName: "demo_db" })
   .then(() => {
-    app.listen(process.env.PORT || 4000, () => {
+    app.listen(process.env.PORT || 3000, () => {
       console.log(
         "Connected to db & listening on port",
-        process.env.PORT || 4000
+        process.env.PORT || 3000
       );
     });
   })
