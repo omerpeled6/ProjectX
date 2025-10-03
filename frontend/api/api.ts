@@ -2,7 +2,8 @@ import axios from "axios";
 import { CounterResponseSchema } from "../types/counter";
 
 const api = axios.create({
-  baseURL: "http://localhost:3000",
+  //baseURL: "http://localhost:3000",
+  baseURL: "https://project-x-nu-mauve.vercel.app",
 });
 
 export const counterApi = {
