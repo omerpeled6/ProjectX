@@ -9,7 +9,6 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.90.2",
     "@tanstack/react-query-devtools": "^5.90.2",
     "@types/axios": "^0.9.36",
     "axios": "^1.12.2",
@@ -18,7 +17,8 @@
     "expo-updates": "~29.0.12",
     "react": "19.1.0",
     "react-native": "0.81.4",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",

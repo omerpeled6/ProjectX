@@ -1,19 +1,27 @@
-import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
-import React, { useState, useEffect, useRef } from "react";
-import { useCounter, useUpdateCounter } from "../hooks/useCounter";
+import { StyleSheet, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { useCounterStore } from "../store/counterStore";
+import Loading from "./Loading";
+import Error from "./Error";
+import CounterDisplay from "./CounterDisplay";
+import CounterButtons from "./CounterButtons";
 
 export default function Counter() {
-  const { data, isLoading, error } = useCounter();
-  const updateCounter = useUpdateCounter();
-  const [count, setCount] = useState(0);
+  const {
+    count,
+    isLoading,
+    error,
+    fetchCounter,
+    updateCounter,
+    increment,
+    decrement,
+  } = useCounterStore();
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Sync with server data
+  // Fetch initial data
   useEffect(() => {
-    if (data?.counter.count !== undefined) {
-      setCount(data.counter.count);
-    }
-  }, [data?.counter.count]);
+    fetchCounter();
+  }, [fetchCounter]);
 
   // Cleanup timeout
   useEffect(() => {
@@ -22,49 +30,39 @@ export default function Counter() {
     };
   }, []);
 
-  const updateCount = (newCount: number) => {
-    setCount(newCount);
+  const handleIncrement = () => {
+    increment();
+    debouncedUpdate();
+  };
 
+  const handleDecrement = () => {
+    decrement();
+    debouncedUpdate();
+  };
+
+  const debouncedUpdate = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
-      updateCounter.mutate(newCount);
+      updateCounter(count);
     }, 2000);
   };
 
   if (isLoading) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Loading...</Text>
-      </View>
-    );
+    return <Loading message="Loading counter..." />;
   }
 
   if (error) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Server is down</Text>
-      </View>
-    );
+    return <Error message="Server is down" onRetry={fetchCounter} />;
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Counter</Text>
-      <Text style={styles.count}>{count}</Text>
-      <View style={styles.buttons}>
-        <TouchableOpacity
-          style={[styles.btn, styles.minus]}
-          onPress={() => updateCount(count - 1)}
-        >
-          <Text style={styles.btnText}>−</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.btn, styles.plus]}
-          onPress={() => updateCount(count + 1)}
-        >
-          <Text style={styles.btnText}>+</Text>
-        </TouchableOpacity>
-      </View>
+      <CounterDisplay count={count} />
+      <CounterButtons
+        count={count}
+        onIncrement={handleIncrement}
+        onDecrement={handleDecrement}
+      />
     </View>
   );
 }
@@ -76,52 +74,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#f8fafc",
     padding: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "600",
-    color: "#1e293b",
-    marginBottom: 32,
-  },
-  count: {
-    fontSize: 64,
-    fontWeight: "700",
-    color: "#3b82f6",
-    marginBottom: 40,
-  },
-  buttons: {
-    flexDirection: "row",
-    gap: 16,
-  },
-  btn: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  minus: {
-    backgroundColor: "#ef4444",
-  },
-  plus: {
-    backgroundColor: "#10b981",
-  },
-  btnText: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#fff",
-  },
-  disabled: {
-    opacity: 0.5,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: "#6b7280",
-    marginTop: 16,
   },
 });
