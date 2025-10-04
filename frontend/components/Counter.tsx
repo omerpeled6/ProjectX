@@ -12,40 +12,32 @@ export default function Counter() {
     isLoading,
     error,
     fetchCounter,
-    updateCounter,
+    updateCounterSilent,
     increment,
     decrement,
+    startPolling,
+    stopPolling,
   } = useCounterStore();
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Fetch initial data
+  // Fetch initial data and start polling
   useEffect(() => {
     fetchCounter();
-  }, [fetchCounter]);
+    startPolling();
 
-  // Cleanup timeout
-  useEffect(() => {
     return () => {
+      stopPolling();
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, []);
+  }, [fetchCounter, startPolling, stopPolling]);
 
-  const handleIncrement = () => {
-    increment();
-    debouncedUpdate();
-  };
-
-  const handleDecrement = () => {
-    decrement();
-    debouncedUpdate();
-  };
-
-  const debouncedUpdate = () => {
+  const debouncedUpdate = (value: number) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      updateCounter(count);
-    }, 2000);
+    timeoutRef.current = setTimeout(() => updateCounterSilent(value), 500);
   };
+
+  const handleIncrement = () => debouncedUpdate(increment());
+  const handleDecrement = () => debouncedUpdate(decrement());
 
   if (isLoading) {
     return <Loading message="Loading counter..." />;

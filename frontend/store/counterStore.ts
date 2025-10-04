@@ -6,16 +6,18 @@ interface CounterState {
   isLoading: boolean;
   error: string | null;
   lastUpdated: number | null;
+  isPolling: boolean;
+  pollingInterval: NodeJS.Timeout | null;
 }
 
 interface CounterActions {
-  setCount: (count: number) => void;
-  increment: () => void;
-  decrement: () => void;
+  increment: () => number;
+  decrement: () => number;
   fetchCounter: () => Promise<void>;
   updateCounter: (count: number) => Promise<void>;
-  setLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
+  updateCounterSilent: (count: number) => Promise<void>;
+  startPolling: (interval?: number) => void;
+  stopPolling: () => void;
   reset: () => void;
 }
 
@@ -26,62 +28,73 @@ const initialState: CounterState = {
   isLoading: false,
   error: null,
   lastUpdated: null,
+  isPolling: false,
+  pollingInterval: null,
 };
+
+const updateCount = (response: any) => ({
+  count: response.counter.count,
+  lastUpdated: Date.now(),
+});
 
 export const useCounterStore = create<CounterStore>((set, get) => ({
   ...initialState,
 
-  setCount: (count: number) => set({ count }),
-
   increment: () => {
     const { count } = get();
-    set({ count: count + 1 });
+    const newCount = count + 1;
+    set({ count: newCount });
+    return newCount;
   },
 
   decrement: () => {
     const { count } = get();
-    set({ count: count - 1 });
+    const newCount = count - 1;
+    set({ count: newCount });
+    return newCount;
   },
 
   fetchCounter: async () => {
     set({ isLoading: true, error: null });
-    try {
-      const response = await counterApi.getCounter();
-      set({
-        count: response.counter.count,
-        isLoading: false,
-        lastUpdated: Date.now(),
-      });
-    } catch (error) {
-      set({
-        error:
-          error instanceof Error ? error.message : "Failed to fetch counter",
-        isLoading: false,
-      });
-    }
+    const response = await counterApi.getCounter();
+    set({ ...updateCount(response), isLoading: false });
   },
 
   updateCounter: async (count: number) => {
     set({ isLoading: true, error: null });
-    try {
-      const response = await counterApi.updateCounter(count);
-      set({
-        count: response.counter.count,
-        isLoading: false,
-        lastUpdated: Date.now(),
-      });
-    } catch (error) {
-      set({
-        error:
-          error instanceof Error ? error.message : "Failed to update counter",
-        isLoading: false,
-      });
+    const response = await counterApi.updateCounter(count);
+    set({ ...updateCount(response), isLoading: false });
+  },
+
+  updateCounterSilent: async (count: number) => {
+    const response = await counterApi.updateCounter(count);
+    set(updateCount(response));
+  },
+
+  startPolling: (interval = 3000) => {
+    const { isPolling } = get();
+    if (isPolling) return;
+
+    const poll = async () => {
+      const response = await counterApi.getCounter();
+      set(updateCount(response));
+    };
+
+    const intervalId = setInterval(poll, interval);
+    set({ isPolling: true, pollingInterval: intervalId });
+  },
+
+  stopPolling: () => {
+    const { pollingInterval } = get();
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      set({ isPolling: false, pollingInterval: null });
     }
   },
 
-  setLoading: (loading: boolean) => set({ isLoading: loading }),
-
-  setError: (error: string | null) => set({ error }),
-
-  reset: () => set(initialState),
+  reset: () => {
+    const { pollingInterval } = get();
+    if (pollingInterval) clearInterval(pollingInterval);
+    set(initialState);
+  },
 }));
