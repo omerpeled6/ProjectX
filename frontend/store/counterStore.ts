@@ -8,6 +8,7 @@ interface CounterState {
   lastUpdated: number | null;
   isPolling: boolean;
   pollingInterval: NodeJS.Timeout | null;
+  isUpdating: boolean;
 }
 
 interface CounterActions {
@@ -30,6 +31,7 @@ const initialState: CounterState = {
   lastUpdated: null,
   isPolling: false,
   pollingInterval: null,
+  isUpdating: false,
 };
 
 const updateCount = (response: any) => ({
@@ -67,8 +69,14 @@ export const useCounterStore = create<CounterStore>((set, get) => ({
   },
 
   updateCounterSilent: async (count: number) => {
-    const response = await counterApi.updateCounter(count);
-    set(updateCount(response));
+    set({ isUpdating: true });
+    try {
+      const response = await counterApi.updateCounter(count);
+      set({ ...updateCount(response), isUpdating: false });
+    } catch (error) {
+      set({ isUpdating: false });
+      throw error;
+    }
   },
 
   startPolling: (interval = 3000) => {
@@ -76,6 +84,10 @@ export const useCounterStore = create<CounterStore>((set, get) => ({
     if (isPolling) return;
 
     const poll = async () => {
+      const { isUpdating } = get();
+      // Don't poll if we're currently updating
+      if (isUpdating) return;
+
       const response = await counterApi.getCounter();
       set(updateCount(response));
     };
