@@ -69,12 +69,27 @@ export const useCounterStore = create<CounterStore>((set, get) => ({
   },
 
   updateCounterSilent: async (count: number) => {
+    const { isPolling, pollingInterval } = get();
+
+    // Stop polling during update
+    if (isPolling && pollingInterval) {
+      clearInterval(pollingInterval);
+      set({ isPolling: false, pollingInterval: null });
+    }
+
     set({ isUpdating: true });
     try {
       const response = await counterApi.updateCounter(count);
       set({ ...updateCount(response), isUpdating: false });
+
+      // Restart polling after update
+      const { startPolling } = get();
+      startPolling();
     } catch (error) {
       set({ isUpdating: false });
+      // Restart polling even on error
+      const { startPolling } = get();
+      startPolling();
       throw error;
     }
   },

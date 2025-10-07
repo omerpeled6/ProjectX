@@ -33,11 +33,28 @@ export default function Counter() {
 
   const debouncedUpdate = (value: number) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => updateCounterSilent(value), 500);
+    timeoutRef.current = setTimeout(async () => {
+      try {
+        await updateCounterSilent(value);
+      } catch (error) {
+        console.error("Failed to update counter:", error);
+      }
+    }, 500);
   };
 
-  const handleIncrement = () => debouncedUpdate(increment());
-  const handleDecrement = () => debouncedUpdate(decrement());
+  const handleIncrement = () => {
+    // Stop polling when user starts interacting
+    stopPolling();
+    const newValue = increment();
+    debouncedUpdate(newValue);
+  };
+
+  const handleDecrement = () => {
+    // Stop polling when user starts interacting
+    stopPolling();
+    const newValue = decrement();
+    debouncedUpdate(newValue);
+  };
 
   if (isLoading) {
     return <Loading message="Loading counter..." />;
